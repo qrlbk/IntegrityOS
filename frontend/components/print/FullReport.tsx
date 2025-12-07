@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { fetchObjects, fetchStatsSummary, fetchTopRisks, fetchDiagnostics, PipelineObject, StatsSummary, TopRisk, Diagnostic } from '@/lib/api'
+import { exportToHTML, exportToPDF, exportToExcel } from '@/lib/reportExport'
+import { Download, FileText, FileDown, FileSpreadsheet, Loader2 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 
 // Динамический импорт карты для мини-карты в отчете
@@ -11,14 +13,17 @@ const MapWrapper = dynamic(() => import('@/components/map/MapWrapper'), {
 
 interface FullReportProps {
   includeMap?: boolean
+  autoPrint?: boolean
 }
 
-export default function FullReport({ includeMap = true }: FullReportProps) {
+export default function FullReport({ includeMap = true, autoPrint = false }: FullReportProps) {
+  const reportRef = useRef<HTMLDivElement>(null)
   const [objects, setObjects] = useState<PipelineObject[]>([])
   const [stats, setStats] = useState<StatsSummary | null>(null)
   const [topRisks, setTopRisks] = useState<TopRisk[]>([])
   const [allDefects, setAllDefects] = useState<Array<{object: PipelineObject, diagnostic: Diagnostic}>>([])
   const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState<'html' | 'pdf' | 'excel' | null>(null)
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'}>({key: 'ml_label', direction: 'desc'})
 
   useEffect(() => {
@@ -80,17 +85,25 @@ export default function FullReport({ includeMap = true }: FullReportProps) {
   }, [])
 
   useEffect(() => {
-    // Автоматическая печать при загрузке
-    const timer = setTimeout(() => {
-      window.print()
-    }, 1000)
-    return () => clearTimeout(timer)
-  }, [])
+    // Автоматическая печать при загрузке (если включена)
+    if (autoPrint) {
+      const timer = setTimeout(() => {
+        window.print()
+      }, 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [autoPrint])
 
   const currentDate = new Date().toLocaleDateString('ru-RU', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+  })
+
+  const currentDateShort = new Date().toLocaleDateString('ru-RU', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   })
 
   // Получаем все объекты с дефектами
@@ -122,6 +135,59 @@ export default function FullReport({ includeMap = true }: FullReportProps) {
     }
   })
 
+  // Функции экспорта
+  const handleExportHTML = async () => {
+    if (!reportRef.current) return
+    setExporting('html')
+    try {
+      const filename = `Отчет_${currentDateShort.replace(/\./g, '_')}.html`
+      await exportToHTML(reportRef.current, filename)
+    } catch (error) {
+      console.error('Ошибка экспорта в HTML:', error)
+      alert('Ошибка при экспорте в HTML')
+    } finally {
+      setExporting(null)
+    }
+  }
+
+  const handleExportPDF = async () => {
+    if (!reportRef.current) return
+    setExporting('pdf')
+    try {
+      const filename = `Отчет_${currentDateShort.replace(/\./g, '_')}.pdf`
+      await exportToPDF(reportRef.current, filename, includeMap)
+    } catch (error) {
+      console.error('Ошибка экспорта в PDF:', error)
+      alert('Ошибка при экспорте в PDF')
+    } finally {
+      setExporting(null)
+    }
+  }
+
+  const handleExportExcel = () => {
+    setExporting('excel')
+    try {
+      const filename = `Отчет_${currentDateShort.replace(/\./g, '_')}.xlsx`
+      const reportData = {
+        objects,
+        stats,
+        topRisks,
+        defects: sortedDefects,
+        currentDate,
+      }
+      exportToExcel(reportData, filename)
+    } catch (error) {
+      console.error('Ошибка экспорта в Excel:', error)
+      alert('Ошибка при экспорте в Excel')
+    } finally {
+      setExporting(null)
+    }
+  }
+
+  const handlePrint = () => {
+    window.print()
+  }
+
   if (loading) {
     return (
       <div className="p-8 max-w-6xl mx-auto bg-white text-black">
@@ -131,7 +197,59 @@ export default function FullReport({ includeMap = true }: FullReportProps) {
   }
 
   return (
-    <div className="print-document p-8 max-w-6xl mx-auto bg-white text-black">
+    <div className="print-document p-8 max-w-6xl mx-auto bg-white text-black" ref={reportRef}>
+      {/* Кнопки экспорта (не печатаются) */}
+      <div className="no-print mb-6 flex flex-wrap gap-3 justify-center items-center bg-gray-50 p-4 rounded-lg border border-gray-200 sticky top-0 z-10">
+        <div className="flex items-center gap-2 text-sm text-gray-600 mr-2">
+          <Download className="w-4 h-4" />
+          <span className="font-medium">Скачать отчет:</span>
+        </div>
+        <button
+          onClick={handleExportHTML}
+          disabled={exporting !== null}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-all font-medium text-sm"
+        >
+          {exporting === 'html' ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <FileText className="w-4 h-4" />
+          )}
+          HTML
+        </button>
+        <button
+          onClick={handleExportPDF}
+          disabled={exporting !== null}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg transition-all font-medium text-sm"
+        >
+          {exporting === 'pdf' ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <FileDown className="w-4 h-4" />
+          )}
+          PDF
+        </button>
+        <button
+          onClick={handleExportExcel}
+          disabled={exporting !== null}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-all font-medium text-sm"
+        >
+          {exporting === 'excel' ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <FileSpreadsheet className="w-4 h-4" />
+          )}
+          Excel
+        </button>
+        <div className="border-l border-gray-300 h-6 mx-2"></div>
+        <button
+          onClick={handlePrint}
+          disabled={exporting !== null}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white rounded-lg transition-all font-medium text-sm"
+        >
+          <FileText className="w-4 h-4" />
+          Печать
+        </button>
+      </div>
       {/* Шапка документа */}
       <div className="text-center mb-8 border-b-2 border-black pb-4">
         <h1 className="text-3xl font-bold mb-2">ОТЧЕТ О ТЕХНИЧЕСКОМ СОСТОЯНИИ</h1>
