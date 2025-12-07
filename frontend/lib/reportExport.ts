@@ -235,19 +235,24 @@ export async function exportToPDF(
   filename: string = 'report.pdf',
   includeMap: boolean = false
 ) {
+  // Сохраняем оригинальные стили и содержимое для восстановления
+  const originalStyles: Map<HTMLElement, string> = new Map()
+  const elementsToRestore: HTMLElement[] = []
+  let mapSection: HTMLElement | null = null
+  let mapOriginalHTML: string = ''
+  
   try {
-    // Клонируем элемент для безопасной работы
-    const clonedElement = reportElement.cloneNode(true) as HTMLElement
-    
     // Скрываем элементы, которые не должны быть в PDF
-    const noPrintElements = clonedElement.querySelectorAll('.no-print')
+    const noPrintElements = reportElement.querySelectorAll('.no-print')
     noPrintElements.forEach((el) => {
-      el.remove()
+      const htmlEl = el as HTMLElement
+      originalStyles.set(htmlEl, htmlEl.style.display)
+      htmlEl.style.display = 'none'
+      elementsToRestore.push(htmlEl)
     })
 
-    // Заменяем карту на текстовое описание для PDF (карты плохо рендерятся)
-    const allSections = clonedElement.querySelectorAll('h2')
-    let mapSection: HTMLElement | null = null
+    // Находим и заменяем карту на текстовое описание
+    const allSections = reportElement.querySelectorAll('h2')
     
     allSections.forEach(h2 => {
       if (h2.textContent?.includes('Карта участка') && h2.parentElement) {
@@ -256,34 +261,79 @@ export async function exportToPDF(
     })
     
     if (mapSection) {
+      // Сохраняем оригинальное содержимое
+      mapOriginalHTML = mapSection.innerHTML
+      
+      // Заменяем содержимое секции на текстовое описание (убираем карту)
       mapSection.innerHTML = `
-        <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 10px;">4. Карта участка</h2>
-        <p style="margin-bottom: 15px; color: #666; padding: 20px; border: 1px solid #ddd; background: #f9f9f9;">
-          Карта участка доступна в онлайн-версии отчета. Координаты объектов с дефектами представлены в разделе "Рекомендуемые раскопки".
-        </p>
+        <h2 class="text-2xl font-bold mb-4">4. Карта участка</h2>
+        <div class="border border-gray-800 p-4">
+          <p class="text-gray-600">
+            Карта участка доступна в онлайн-версии отчета. Координаты объектов с дефектами представлены в разделе "Рекомендуемые раскопки".
+          </p>
+        </div>
       `
+      
+      // Ждем немного для применения изменений
+      await new Promise(resolve => setTimeout(resolve, 200))
     }
 
-    // Конвертируем HTML в canvas с увеличенной задержкой для загрузки всех ресурсов
-    const canvas = await html2canvas(clonedElement, {
+    // Конвертируем HTML в canvas, работая с оригинальным элементом
+    // Используем простые настройки без клонирования iframe
+    const canvas = await html2canvas(reportElement, {
       scale: 1.5,
       useCORS: true,
       allowTaint: false,
       logging: false,
       backgroundColor: '#ffffff',
-      onclone: (clonedDoc) => {
-        // Удаляем все интерактивные элементы из клона
-        const scripts = clonedDoc.querySelectorAll('script')
-        scripts.forEach(script => script.remove())
-        
-        // Скрываем все элементы загрузки
-        const loadingElements = clonedDoc.querySelectorAll('[class*="loading"], [class*="Loading"]')
-        loadingElements.forEach(el => {
-          const htmlEl = el as HTMLElement
-          htmlEl.style.display = 'none'
-        })
+      ignoreElements: (element) => {
+        // Игнорируем все iframe и Leaflet элементы
+        if (element.tagName === 'IFRAME') return true
+        if (element.classList.contains('leaflet-container')) return true
+        if (element.classList.contains('leaflet-pane')) return true
+        if (element.classList.contains('leaflet-map-pane')) return true
+        if (element.querySelector('iframe')) return true
+        return false
       },
-      imageTimeout: 5000,
+      onclone: (clonedDoc) => {
+        try {
+          // Удаляем все iframe из клона
+          const iframes = clonedDoc.querySelectorAll('iframe')
+          iframes.forEach(iframe => {
+            try {
+              iframe.remove()
+            } catch (e) {
+              // Игнорируем ошибки удаления
+            }
+          })
+          
+          // Удаляем все Leaflet контейнеры
+          const leafletSelectors = [
+            '.leaflet-container',
+            '.leaflet-pane',
+            '.leaflet-map-pane',
+            '.leaflet-control-container',
+            '[class*="leaflet"]'
+          ]
+          
+          leafletSelectors.forEach(selector => {
+            try {
+              const elements = clonedDoc.querySelectorAll(selector)
+              elements.forEach(el => el.remove())
+            } catch (e) {
+              // Игнорируем ошибки
+            }
+          })
+          
+          // Удаляем скрипты
+          const scripts = clonedDoc.querySelectorAll('script')
+          scripts.forEach(script => script.remove())
+        } catch (e) {
+          // Игнорируем ошибки в onclone
+          console.warn('Ошибка в onclone:', e)
+        }
+      },
+      imageTimeout: 15000,
     })
 
     if (!canvas || canvas.width === 0 || canvas.height === 0) {
@@ -364,8 +414,21 @@ export async function exportToPDF(
   } catch (error) {
     console.error('Ошибка при экспорте в PDF:', error)
     const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка'
-    alert(`Ошибка при создании PDF: ${errorMessage}. Попробуйте использовать другой формат или отключить карту.`)
+    alert(`Ошибка при создании PDF: ${errorMessage}. Попробуйте использовать другой формат.`)
     throw error
+  } finally {
+    // Восстанавливаем оригинальные стили и содержимое
+    elementsToRestore.forEach((el) => {
+      const originalDisplay = originalStyles.get(el)
+      if (originalDisplay !== undefined) {
+        el.style.display = originalDisplay
+      }
+    })
+    
+    // Восстанавливаем содержимое карты, если было изменено
+    if (mapSection && mapOriginalHTML) {
+      mapSection.innerHTML = mapOriginalHTML
+    }
   }
 }
 
