@@ -1,0 +1,265 @@
+@import 'leaflet/dist/leaflet.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Плавная прокрутка */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Кастомный скроллбар */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, #3b82f6, #0ea5e9, #06b6d4);
+  border-radius: 10px;
+  transition: all 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, #2563eb, #0284c7, #0891b2);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+}
+
+/* Современные стили для улучшения дизайна */
+@layer utilities {
+  /* Плавные переходы */
+  .transition-smooth {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Glassmorphism эффект */
+  .glass {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  
+  /* Градиентные тени */
+  .shadow-gradient {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+
+  /* Анимированный градиентный фон */
+  .gradient-animated {
+    background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+    background-size: 400% 400%;
+    animation: gradientShift 15s ease infinite;
+  }
+
+  @keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Мягкие эффекты свечения в стиле 2025 */
+  .glow {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+
+  .glow-blue {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+
+  .glow-orange {
+    box-shadow: 0 0 20px rgba(249, 115, 22, 0.3);
+  }
+
+  .glow-green {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+  }
+
+  .glow-cyan {
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
+  }
+}
+
+@layer base {
+  :root {
+    /* Тихая роскошь 2025 - Светлая тема с мягкими нейтральными тонами */
+    --background: 0 0% 99%; /* Почти белый с легким оттенком */
+    --foreground: 240 6% 10%; /* Мягкий темно-серый */
+    --card: 0 0% 100%;
+    --card-foreground: 240 6% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 6% 10%;
+    --primary: 210 50% 50%; /* Мягкий голубой (природный) */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 96%; /* Очень светлый серый */
+    --secondary-foreground: 240 6% 10%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%; /* Приглушенный серый */
+    --accent: 210 40% 55%; /* Мягкий голубо-синий */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 15 65% 55%; /* Терракотово-оранжевый (мягкий) */
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 90%; /* Светло-серый для границ */
+    --input: 240 6% 92%; /* Еще светлее для инпутов */
+    --ring: 210 50% 50%; /* Мягкий голубой для фокуса */
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    /* Мягкий минимализм 2025 - Темная тема с приглушенными тонами */
+    --background: 240 8% 6%; /* Почти черный, но мягкий */
+    --foreground: 0 0% 96%; /* Почти белый, но мягкий */
+    --card: 240 6% 10%; /* Мягкий темно-серый */
+    --card-foreground: 0 0% 96%;
+    --popover: 240 6% 10%;
+    --popover-foreground: 0 0% 96%;
+    --primary: 210 60% 60%; /* Мягкий голубой для темной темы */
+    --primary-foreground: 240 8% 6%;
+    --secondary: 240 5% 16%; /* Темно-серый */
+    --secondary-foreground: 0 0% 96%;
+    --muted: 240 5% 16%;
+    --muted-foreground: 240 5% 65%; /* Приглушенный серый */
+    --accent: 210 50% 65%; /* Мягкий голубо-синий */
+    --accent-foreground: 240 8% 6%;
+    --destructive: 15 70% 60%; /* Мягкий терракотовый */
+    --destructive-foreground: 0 0% 96%;
+    --border: 240 5% 20%; /* Мягкий темно-серый для границ */
+    --input: 240 5% 18%;
+    --ring: 210 60% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Leaflet styles */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  /* Улучшение работы с тачпадом */
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+  /* Предотвращение конфликтов с прокруткой страницы */
+  overscroll-behavior: contain;
+}
+
+/* Улучшение обработки жестов на тачпаде */
+.leaflet-pane {
+  touch-action: pan-x pan-y;
+}
+
+.leaflet-map-pane {
+  touch-action: pan-x pan-y;
+}
+
+/* Плавность при перетаскивании */
+.leaflet-dragging .leaflet-marker-pane,
+.leaflet-dragging .leaflet-shadow-pane,
+.leaflet-dragging .leaflet-tile-pane {
+  cursor: move !important;
+  cursor: grabbing !important;
+}
+
+/* Улучшение для тач-событий */
+.leaflet-interactive {
+  touch-action: pan-x pan-y;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Статичные стили для маркеров - без анимации, но заметные */
+.critical-marker {
+  /* Красная тень для выделения критических маркеров */
+  filter: drop-shadow(0 0 4px rgba(220, 38, 38, 0.8));
+}
+
+.normal-marker {
+  /* Легкая тень для нормальных маркеров */
+  filter: drop-shadow(0 0 2px rgba(16, 185, 129, 0.5));
+}
+
+.medium-marker {
+  /* Желтая тень для средних маркеров */
+  filter: drop-shadow(0 0 3px rgba(234, 179, 8, 0.6));
+}
+
+/* Подсветка выделенного маркера */
+.highlighted-marker {
+  animation: pulse-highlight 2s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.8));
+  z-index: 1000 !important;
+}
+
+@keyframes pulse-highlight {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+/* Стили для печати (PDF) */
+@media print {
+  /* На главной странице скрываем карту и UI */
+  .leaflet-container,
+  .leaflet-control-container,
+  header,
+  [class*="absolute"]:not([class*="print-visible"]) {
+    display: none !important;
+  }
+  
+  /* Стили для страницы печати наряд-допуска */
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  
+  .print-document {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 1cm !important;
+    font-family: 'Times New Roman', serif !important;
+    line-height: 1.6 !important;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Убираем все элементы интерфейса при печати */
+  nav,
+  button,
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Убеждаемся, что таблицы печатаются правильно */
+  table {
+    border-collapse: collapse !important;
+    page-break-inside: avoid;
+    width: 100%;
+  }
+  
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  
+  /* Настройки страницы для печати */
+  @page {
+    size: A4;
+    margin: 2cm;
+  }
+}
+
