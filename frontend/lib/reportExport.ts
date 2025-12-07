@@ -16,9 +16,85 @@ interface ReportData {
 }
 
 /**
+ * Создает HTML-представление карты с координатами объектов
+ */
+function createMapTableHTML(topRisks: TopRisk[], objects: PipelineObject[]): string {
+  const criticalObjects = objects.filter(o => o.status === 'Critical' && o.lat && o.lon)
+  
+  let tableHTML = `
+    <div class="mb-8">
+      <h2 style="font-size: 20px; font-weight: bold; margin-top: 20px; margin-bottom: 10px;">4. Карта участка</h2>
+      <p style="margin-bottom: 15px; font-size: 14px; color: #666;">
+        Координаты объектов с дефектами. Красные маркеры - объекты с критическими дефектами, зеленые - нормальные.
+      </p>
+      <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 12px;">
+        <thead>
+          <tr style="background-color: #f0f0f0;">
+            <th style="border: 1px solid #000; padding: 8px; text-align: left;">№</th>
+            <th style="border: 1px solid #000; padding: 8px; text-align: left;">Объект</th>
+            <th style="border: 1px solid #000; padding: 8px; text-align: left;">Тип</th>
+            <th style="border: 1px solid #000; padding: 8px; text-align: left;">Широта</th>
+            <th style="border: 1px solid #000; padding: 8px; text-align: left;">Долгота</th>
+            <th style="border: 1px solid #000; padding: 8px; text-align: left;">Статус</th>
+          </tr>
+        </thead>
+        <tbody>
+  `
+  
+  // Добавляем критичные объекты
+  criticalObjects.slice(0, 50).forEach((obj, index) => {
+    tableHTML += `
+      <tr style="background-color: ${index % 2 === 0 ? '#fff' : '#f9f9f9'};">
+        <td style="border: 1px solid #000; padding: 8px;">${index + 1}</td>
+        <td style="border: 1px solid #000; padding: 8px;">${obj.name}</td>
+        <td style="border: 1px solid #000; padding: 8px;">${obj.type}</td>
+        <td style="border: 1px solid #000; padding: 8px;">${obj.lat?.toFixed(6) || '-'}</td>
+        <td style="border: 1px solid #000; padding: 8px;">${obj.lon?.toFixed(6) || '-'}</td>
+        <td style="border: 1px solid #000; padding: 8px; color: #dc2626; font-weight: bold;">КРИТИЧЕСКИЙ</td>
+      </tr>
+    `
+  })
+  
+  tableHTML += `
+        </tbody>
+      </table>
+    </div>
+  `
+  
+  return tableHTML
+}
+
+/**
  * Экспорт отчета в HTML формат
  */
-export async function exportToHTML(reportElement: HTMLElement, filename: string = 'report.html') {
+export async function exportToHTML(
+  reportElement: HTMLElement, 
+  filename: string = 'report.html',
+  topRisks: TopRisk[] = [],
+  objects: PipelineObject[] = []
+) {
+  // Клонируем элемент, чтобы не изменять оригинал
+  const clonedElement = reportElement.cloneNode(true) as HTMLElement
+  
+  // Удаляем кнопки экспорта
+  const noPrintElements = clonedElement.querySelectorAll('.no-print')
+  noPrintElements.forEach(el => el.remove())
+  
+  // Заменяем карту на таблицу координат
+  // Ищем секцию с картой по заголовку "4. Карта участка"
+  const allSections = clonedElement.querySelectorAll('h2')
+  let mapSection: HTMLElement | null = null
+  
+  allSections.forEach(h2 => {
+    if (h2.textContent?.includes('Карта участка') && h2.parentElement) {
+      mapSection = h2.parentElement as HTMLElement
+    }
+  })
+  
+  if (mapSection) {
+    mapSection.outerHTML = createMapTableHTML(topRisks, objects)
+  }
+  
   // Получаем HTML содержимое элемента
   const htmlContent = `
 <!DOCTYPE html>
@@ -134,7 +210,7 @@ export async function exportToHTML(reportElement: HTMLElement, filename: string 
     </style>
 </head>
 <body>
-    ${reportElement.innerHTML}
+    ${clonedElement.innerHTML}
 </body>
 </html>
   `
@@ -160,72 +236,136 @@ export async function exportToPDF(
   includeMap: boolean = false
 ) {
   try {
-    // Скрываем элементы, которые не должны быть в PDF (кнопки, карта если нужно)
-    const noPrintElements = reportElement.querySelectorAll('.no-print')
-    const originalDisplay: (string | null)[] = []
+    // Клонируем элемент для безопасной работы
+    const clonedElement = reportElement.cloneNode(true) as HTMLElement
     
+    // Скрываем элементы, которые не должны быть в PDF
+    const noPrintElements = clonedElement.querySelectorAll('.no-print')
     noPrintElements.forEach((el) => {
-      const htmlEl = el as HTMLElement
-      originalDisplay.push(htmlEl.style.display)
-      htmlEl.style.display = 'none'
+      el.remove()
     })
 
-    // Если карта не нужна, скрываем её
-    if (!includeMap) {
-      const mapElement = reportElement.querySelector('[style*="height"]')
-      if (mapElement) {
-        const htmlEl = mapElement as HTMLElement
-        originalDisplay.push(htmlEl.style.display)
-        htmlEl.style.display = 'none'
+    // Заменяем карту на текстовое описание для PDF (карты плохо рендерятся)
+    const allSections = clonedElement.querySelectorAll('h2')
+    let mapSection: HTMLElement | null = null
+    
+    allSections.forEach(h2 => {
+      if (h2.textContent?.includes('Карта участка') && h2.parentElement) {
+        mapSection = h2.parentElement as HTMLElement
       }
+    })
+    
+    if (mapSection) {
+      mapSection.innerHTML = `
+        <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 10px;">4. Карта участка</h2>
+        <p style="margin-bottom: 15px; color: #666; padding: 20px; border: 1px solid #ddd; background: #f9f9f9;">
+          Карта участка доступна в онлайн-версии отчета. Координаты объектов с дефектами представлены в разделе "Рекомендуемые раскопки".
+        </p>
+      `
     }
 
-    // Конвертируем HTML в canvas
-    const canvas = await html2canvas(reportElement, {
-      scale: 2,
+    // Конвертируем HTML в canvas с увеличенной задержкой для загрузки всех ресурсов
+    const canvas = await html2canvas(clonedElement, {
+      scale: 1.5,
       useCORS: true,
+      allowTaint: false,
       logging: false,
       backgroundColor: '#ffffff',
+      onclone: (clonedDoc) => {
+        // Удаляем все интерактивные элементы из клона
+        const scripts = clonedDoc.querySelectorAll('script')
+        scripts.forEach(script => script.remove())
+        
+        // Скрываем все элементы загрузки
+        const loadingElements = clonedDoc.querySelectorAll('[class*="loading"], [class*="Loading"]')
+        loadingElements.forEach(el => {
+          const htmlEl = el as HTMLElement
+          htmlEl.style.display = 'none'
+        })
+      },
+      imageTimeout: 5000,
     })
 
-    // Восстанавливаем скрытые элементы
-    noPrintElements.forEach((el, index) => {
-      const htmlEl = el as HTMLElement
-      if (originalDisplay[index] !== undefined) {
-        htmlEl.style.display = originalDisplay[index] || ''
-      }
-    })
+    if (!canvas || canvas.width === 0 || canvas.height === 0) {
+      throw new Error('Не удалось создать изображение для PDF')
+    }
 
-    const imgData = canvas.toDataURL('image/png')
+    const imgData = canvas.toDataURL('image/jpeg', 0.85)
     const pdf = new jsPDF('p', 'mm', 'a4')
     
     const pdfWidth = pdf.internal.pageSize.getWidth()
     const pdfHeight = pdf.internal.pageSize.getHeight()
     const imgWidth = canvas.width
     const imgHeight = canvas.height
-    const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight)
-    const imgScaledWidth = imgWidth * ratio
-    const imgScaledHeight = imgHeight * ratio
+    
+    // Рассчитываем размеры для вставки на страницу
+    const margin = 10 // отступы в мм
+    const availableWidth = pdfWidth - (2 * margin)
+    const availableHeight = pdfHeight - (2 * margin)
+    
+    // Конвертируем размеры canvas в мм (примерно 3.78 пикселей на мм при 96dpi)
+    const pixelsPerMm = 3.78
+    const imgWidthMm = imgWidth / pixelsPerMm
+    const imgHeightMm = imgHeight / pixelsPerMm
+    
+    // Вычисляем масштаб
+    const widthRatio = availableWidth / imgWidthMm
+    const heightRatio = availableHeight / imgHeightMm
+    const ratio = Math.min(widthRatio, heightRatio, 1)
+    
+    const finalWidth = imgWidthMm * ratio
+    const finalHeight = imgHeightMm * ratio
 
-    // Если изображение больше одной страницы, разбиваем на несколько страниц
-    const pageHeight = pdfHeight
-    let heightLeft = imgScaledHeight
-    let position = 0
-
-    pdf.addImage(imgData, 'PNG', 0, position, imgScaledWidth, imgScaledHeight)
-    heightLeft -= pageHeight
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgScaledHeight
-      pdf.addPage()
-      pdf.addImage(imgData, 'PNG', 0, position, imgScaledWidth, imgScaledHeight)
-      heightLeft -= pageHeight
+    // Если изображение помещается на одной странице
+    if (finalHeight <= availableHeight) {
+      pdf.addImage(imgData, 'JPEG', margin, margin, finalWidth, finalHeight)
+    } else {
+      // Разбиваем на несколько страниц
+      const pageHeight = availableHeight
+      let yOffset = 0
+      let sourceY = 0
+      
+      while (yOffset < finalHeight) {
+        if (yOffset > 0) {
+          pdf.addPage()
+        }
+        
+        const remainingHeight = finalHeight - yOffset
+        const heightToDraw = Math.min(remainingHeight, pageHeight)
+        
+        // Вычисляем, какую часть исходного изображения нужно взять
+        const sourceHeight = (heightToDraw / ratio) * pixelsPerMm
+        
+        // Создаем временный canvas для этой части
+        const tempCanvas = document.createElement('canvas')
+        tempCanvas.width = imgWidth
+        tempCanvas.height = Math.ceil(sourceHeight)
+        const tempCtx = tempCanvas.getContext('2d')
+        
+        if (tempCtx) {
+          tempCtx.drawImage(
+            canvas,
+            0, sourceY,
+            imgWidth, sourceHeight,
+            0, 0,
+            imgWidth, sourceHeight
+          )
+          
+          const pageImgData = tempCanvas.toDataURL('image/jpeg', 0.85)
+          pdf.addImage(pageImgData, 'JPEG', margin, margin, finalWidth, heightToDraw)
+        }
+        
+        yOffset += pageHeight
+        sourceY += sourceHeight
+      }
     }
 
     pdf.save(filename)
   } catch (error) {
     console.error('Ошибка при экспорте в PDF:', error)
-    alert('Ошибка при создании PDF. Попробуйте использовать другой формат.')
+    const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка'
+    alert(`Ошибка при создании PDF: ${errorMessage}. Попробуйте использовать другой формат или отключить карту.`)
+    throw error
   }
 }
 

@@ -141,7 +141,7 @@ export default function FullReport({ includeMap = true, autoPrint = false }: Ful
     setExporting('html')
     try {
       const filename = `Отчет_${currentDateShort.replace(/\./g, '_')}.html`
-      await exportToHTML(reportRef.current, filename)
+      await exportToHTML(reportRef.current, filename, topRisks, objects)
     } catch (error) {
       console.error('Ошибка экспорта в HTML:', error)
       alert('Ошибка при экспорте в HTML')
@@ -155,10 +155,11 @@ export default function FullReport({ includeMap = true, autoPrint = false }: Ful
     setExporting('pdf')
     try {
       const filename = `Отчет_${currentDateShort.replace(/\./g, '_')}.pdf`
-      await exportToPDF(reportRef.current, filename, includeMap)
+      // PDF без карты работает лучше
+      await exportToPDF(reportRef.current, filename, false)
     } catch (error) {
       console.error('Ошибка экспорта в PDF:', error)
-      alert('Ошибка при экспорте в PDF')
+      alert('Ошибка при экспорте в PDF. Попробуйте другой формат.')
     } finally {
       setExporting(null)
     }
